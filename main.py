@@ -20,6 +20,8 @@ app = FastAPI(title="SDE Symbolic Solver API", version="1.0.0")
 origins = [
     "http://localhost:3000",
     "http://localhost:8000",
+    "https://sde-solver.netlify.app",  
+    "https://*.netlify.app", 
 ]
 
 # URL Netlify with production
@@ -34,7 +36,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class SDEProblem(BaseModel):
     equation_type: str  # "ito" or "stratonovich"
@@ -202,4 +203,5 @@ async def get_examples():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
