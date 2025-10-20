@@ -84,7 +84,7 @@ class SDESolver:
             # This is a simplified approach - in practice would need more sophisticated detection
             
             # For the specific case: drift = -2*x/(1+t), diffusion = sqrt(t*(1-t))
-            if drift == -2*x/(1+t) and diffusion == sqrt(t*(1-t)):
+            if str(drift) == str(-2*x/(1+t)) and str(diffusion) == str(sqrt(t*(1-t))):
                 self.add_step("Specific Case Detected", 
                              "Solving: $dX_t = -\\frac{2X_t}{1+t}dt + \\sqrt{t(1-t)}dW_t$")
                 
