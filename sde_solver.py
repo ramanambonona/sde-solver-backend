@@ -162,42 +162,43 @@ class SDESolver:
             }
     
     def solve_reducible_nonlinear(self, drift: sp.Expr, diffusion: sp.Expr, t0: float = 0, X0: float = 0) -> Dict:
-        """Solve reducible nonlinear SDE using integrating factor method"""
-        t, w, x = symbols('t w x')
-        
-        b_expr = diffusion / x if x in diffusion.free_symbols else 0
-        
-        self.add_step("Identify Integrating Factor", f"Diffusion coefficient: $b(t) = {sp.latex(b_expr)}$")
-        
-        stochastic_integral = integrate(b_expr, w)
-        deterministic_integral = integrate(b_expr**2, t) / 2
-        
-        F_t = sp.exp(-stochastic_integral + deterministic_integral)
-        
-        self.add_step("Integrating Factor", f"$F_t = \\exp\\left(-\\int b(s)dW_s + \\frac{{1}}{{2}}\\int b(s)^2 ds\\right)$")
-        
-        Y = Function('Y')(t)
-        X_expr = Y / F_t
-        
-        f_expr = drift.subs(x, X_expr)
-        ode_rhs = F_t * f_expr
-        
-        self.add_step("Transformed ODE", f"Let $Y_t = F_t X_t$, then:\n" f"$\\frac{{dY_t}}{{dt}} = F_t \\cdot f(t, F_t^{{-1}} Y_t)$")
-        
-        try:
-            from sympy import dsolve
-            ode_solution = dsolve(sp.Derivative(Y, t) - ode_rhs, Y)
-            X_solution = ode_solution.rhs / F_t
-        except:
-            X_solution = X0 * sp.exp(integrate(b_expr, w) - integrate(b_expr**2, t)/2 + integrate(drift, t)
-        
-        self.add_step("ODE Solution", f"Solution of transformed ODE gives:\n" f"$X_t = {sp.latex(X_solution)}$")
-        
-        return {
-            "solution": X_solution,
-            "integrating_factor": F_t,
-            "steps": self.steps
-        }
+    """Solve reducible nonlinear SDE using integrating factor method"""
+    t, w, x = symbols('t w x')
+    
+    b_expr = diffusion / x if x in diffusion.free_symbols else 0
+    
+    self.add_step("Identify Integrating Factor", f"Diffusion coefficient: $b(t) = {sp.latex(b_expr)}$")
+    
+    stochastic_integral = integrate(b_expr, w)
+    deterministic_integral = integrate(b_expr**2, t) / 2
+    F_t = sp.exp(-stochastic_integral + deterministic_integral)
+    
+    self.add_step("Integrating Factor", f"$F_t = \\exp\\left(-\\int b(s)dW_s + \\frac{{1}}{{2}}\\int b(s)^2 ds\\right)$")
+    
+    Y = Function('Y')(t)
+    X_expr = Y / F_t
+    f_expr = drift.subs(x, X_expr)
+    ode_rhs = F_t * f_expr
+    
+    self.add_step("Transformed ODE", f"Let $Y_t = F_t X_t$, then $\\frac{{dY_t}}{{dt}} = F_t \\cdot f(t, F_t^{{-1}} Y_t)$")
+    
+    try:
+        from sympy import dsolve
+        ode_solution = dsolve(sp.Derivative(Y, t) - ode_rhs, Y)
+        X_solution = ode_solution.rhs / F_t
+    except:
+        X_solution = X0 * sp.exp(integrate(b_expr, w) - integrate(b_expr**2, t)/2 + integrate(drift, t)
+    
+    # CORRECTION : Éviter les sauts de ligne dans l'appel de fonction
+    solution_text = "Solution of transformed ODE gives:"
+    solution_equation = f"$X_t = {sp.latex(X_solution)}$"
+    self.add_step("ODE Solution", solution_text + "\n" + solution_equation)
+    
+    return {
+        "solution": X_solution,
+        "integrating_factor": F_t,
+        "steps": self.steps
+    }
     
     def solve(self, equation_type: str, drift: str, diffusion: str, 
               initial_condition: Optional[str] = None,
@@ -264,4 +265,5 @@ def convert_ito_stratonovich(drift_ito: sp.Expr, diffusion: sp.Expr, variables: 
     x = symbols('x')
     drift_stratonovich = drift_ito - 0.5 * diffusion * diff(diffusion, x)
     return drift_stratonovich
+
 
