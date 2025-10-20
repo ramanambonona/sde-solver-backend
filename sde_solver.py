@@ -97,7 +97,8 @@ class SDESolver:
         c = diff(diffusion, x) if x in diffusion.free_symbols else 0
         d = diffusion.subs(x, 0) if x in diffusion.free_symbols else diffusion
         
-        self.add_step("Identify Coefficients", f"Drift: $a(t) = {sp.latex(a)}$, $b(t) = {sp.latex(b)}$\n" f"Diffusion: $c(t) = {sp.latex(c)}$, $d(t) = {sp.latex(d)}$")
+        step1_content = f"Drift: $a(t) = {sp.latex(a)}$, $b(t) = {sp.latex(b)}$\nDiffusion: $c(t) = {sp.latex(c)}$, $d(t) = {sp.latex(d)}$"
+        self.add_step("Identify Coefficients", step1_content)
         
         integrand_a = a - c**2/2
         integral_a = integrate(integrand_a, (s, t0, t))
@@ -106,7 +107,7 @@ class SDESolver:
         Phi = sp.exp(integral_a + integral_c)
         Phi_inv = 1/Phi
         
-        self.add_step("Integration Factor",f"$\\Phi_{{t_0,t}} = \\exp\\left(\\int_{{t_0}}^t \\left(a(s) - \\frac{{1}}{{2}}c(s)^2\\right)ds + \\int_{{t_0}}^t c(s)dW_s\\right)$")
+        self.add_step("Integration Factor", f"$\\Phi_{{t_0,t}} = \\exp\\left(\\int_{{t_0}}^t \\left(a(s) - \\frac{{1}}{{2}}c(s)^2\\right)ds + \\int_{{t_0}}^t c(s)dW_s\\right)$")
         
         integrand1 = (b - c*d) * Phi_inv
         I1 = integrate(integrand1, (s, t0, t))
@@ -128,20 +129,22 @@ class SDESolver:
         """Solve stationary Kolmogorov forward equation using Wright's formula"""
         t, x = symbols('t x')
         
-        self.add_step("Kolmogorov Forward Equation", "Stationary solution of Kolmogorov forward equation:\n" "$\\frac{\\partial p}{\\partial t} = -\\frac{\\partial}{\\partial x}[\\mu(x)p] + \\frac{1}{2}\\frac{\\partial^2}{\\partial x^2}[\\sigma^2(x)p]$")
+        step1_content = "Stationary solution of Kolmogorov forward equation:\n$\\frac{\\partial p}{\\partial t} = -\\frac{\\partial}{\\partial x}[\\mu(x)p] + \\frac{1}{2}\\frac{\\partial^2}{\\partial x^2}[\\sigma^2(x)p]$"
+        self.add_step("Kolmogorov Forward Equation", step1_content)
         
-        self.add_step("Stationary Solution", "For stationary solution $\\frac{\\partial p}{\\partial t} = 0$, we get:\n" "$p(x) = \\frac{C}{\\sigma^2(x)} \\exp\\left(2\\int^x \\frac{\\mu(s)}{\\sigma^2(s)} ds\\right)$")
+        step2_content = "For stationary solution $\\frac{\\partial p}{\\partial t} = 0$, we get:\n$p(x) = \\frac{C}{\\sigma^2(x)} \\exp\\left(2\\int^x \\frac{\\mu(s)}{\\sigma^2(s)} ds\\right)$"
+        self.add_step("Stationary Solution", step2_content)
         
         try:
             exponent_integral = 2 * integrate(drift / (diffusion**2), x)
-            self.add_step("Exponent Integral",
-                         f"$2\\int \\frac{{\\mu(x)}}{{\\sigma^2(x)}} dx = {sp.latex(exponent_integral)}$")
+            self.add_step("Exponent Integral", f"$2\\int \\frac{{\\mu(x)}}{{\\sigma^2(x)}} dx = {sp.latex(exponent_integral)}$")
             
             unnormalized_density = sp.exp(exponent_integral) / (diffusion**2)
             C = symbols('C')
             stationary_density = C * unnormalized_density
             
-            self.add_step("Unnormalized Density", f"$p(x) = C \\cdot \\frac{{1}}{{\\sigma^2(x)}} \\exp\\left(2\\int \\frac{{\\mu(x)}}{{\\sigma^2(x)}} dx\\right)$\n" f"$p(x) = {sp.latex(stationary_density)}$")
+            step4_content = f"$p(x) = C \\cdot \\frac{{1}}{{\\sigma^2(x)}} \\exp\\left(2\\int \\frac{{\\mu(x)}}{{\\sigma^2(x)}} dx\\right)$\n$p(x) = {sp.latex(stationary_density)}$"
+            self.add_step("Unnormalized Density", step4_content)
             
             return {
                 "solution": stationary_density,
@@ -162,43 +165,42 @@ class SDESolver:
             }
     
     def solve_reducible_nonlinear(self, drift: sp.Expr, diffusion: sp.Expr, t0: float = 0, X0: float = 0) -> Dict:
-    """Solve reducible nonlinear SDE using integrating factor method"""
-    t, w, x = symbols('t w x')
-    
-    b_expr = diffusion / x if x in diffusion.free_symbols else 0
-    
-    self.add_step("Identify Integrating Factor", f"Diffusion coefficient: $b(t) = {sp.latex(b_expr)}$")
-    
-    stochastic_integral = integrate(b_expr, w)
-    deterministic_integral = integrate(b_expr**2, t) / 2
-    F_t = sp.exp(-stochastic_integral + deterministic_integral)
-    
-    self.add_step("Integrating Factor", f"$F_t = \\exp\\left(-\\int b(s)dW_s + \\frac{{1}}{{2}}\\int b(s)^2 ds\\right)$")
-    
-    Y = Function('Y')(t)
-    X_expr = Y / F_t
-    f_expr = drift.subs(x, X_expr)
-    ode_rhs = F_t * f_expr
-    
-    self.add_step("Transformed ODE", f"Let $Y_t = F_t X_t$, then $\\frac{{dY_t}}{{dt}} = F_t \\cdot f(t, F_t^{{-1}} Y_t)$")
-    
-    try:
-        from sympy import dsolve
-        ode_solution = dsolve(sp.Derivative(Y, t) - ode_rhs, Y)
-        X_solution = ode_solution.rhs / F_t
-    except:
-        X_solution = X0 * sp.exp(integrate(b_expr, w) - integrate(b_expr**2, t)/2 + integrate(drift, t)
-    
-    # CORRECTION : Éviter les sauts de ligne dans l'appel de fonction
-    solution_text = "Solution of transformed ODE gives:"
-    solution_equation = f"$X_t = {sp.latex(X_solution)}$"
-    self.add_step("ODE Solution", solution_text + "\n" + solution_equation)
-    
-    return {
-        "solution": X_solution,
-        "integrating_factor": F_t,
-        "steps": self.steps
-    }
+        """Solve reducible nonlinear SDE using integrating factor method"""
+        t, w, x = symbols('t w x')
+        
+        b_expr = diffusion / x if x in diffusion.free_symbols else 0
+        
+        self.add_step("Identify Integrating Factor", f"Diffusion coefficient: $b(t) = {sp.latex(b_expr)}$")
+        
+        stochastic_integral = integrate(b_expr, w)
+        deterministic_integral = integrate(b_expr**2, t) / 2
+        F_t = sp.exp(-stochastic_integral + deterministic_integral)
+        
+        self.add_step("Integrating Factor", f"$F_t = \\exp\\left(-\\int b(s)dW_s + \\frac{{1}}{{2}}\\int b(s)^2 ds\\right)$")
+        
+        Y = Function('Y')(t)
+        X_expr = Y / F_t
+        f_expr = drift.subs(x, X_expr)
+        ode_rhs = F_t * f_expr
+        
+        self.add_step("Transformed ODE", f"Let $Y_t = F_t X_t$, then $\\frac{{dY_t}}{{dt}} = F_t \\cdot f(t, F_t^{{-1}} Y_t)$")
+        
+        try:
+            from sympy import dsolve
+            ode_solution = dsolve(sp.Derivative(Y, t) - ode_rhs, Y)
+            X_solution = ode_solution.rhs / F_t
+        except:
+            X_solution = X0 * sp.exp(integrate(b_expr, w) - integrate(b_expr**2, t)/2 + integrate(drift, t)
+        
+        solution_text = "Solution of transformed ODE gives:"
+        solution_equation = f"$X_t = {sp.latex(X_solution)}$"
+        self.add_step("ODE Solution", solution_text + "\n" + solution_equation)
+        
+        return {
+            "solution": X_solution,
+            "integrating_factor": F_t,
+            "steps": self.steps
+        }
     
     def solve(self, equation_type: str, drift: str, diffusion: str, 
               initial_condition: Optional[str] = None,
@@ -213,7 +215,8 @@ class SDESolver:
         drift_expr = self.parse_expression(drift, variables)
         diffusion_expr = self.parse_expression(diffusion, variables)
         
-        self.add_step("Problem Setup", f"Solving {'Itô' if equation_type == 'ito' else 'Stratonovich'} SDE:\n" f"$dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t$")
+        step_content = f"Solving {'Itô' if equation_type == 'ito' else 'Stratonovich'} SDE:\n$dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t$"
+        self.add_step("Problem Setup", step_content)
         
         x, t = symbols('x t')
         is_kolmogorov = "kolmogorov" in drift.lower() or "stationary" in drift.lower()
@@ -265,5 +268,3 @@ def convert_ito_stratonovich(drift_ito: sp.Expr, diffusion: sp.Expr, variables: 
     x = symbols('x')
     drift_stratonovich = drift_ito - 0.5 * diffusion * diff(diffusion, x)
     return drift_stratonovich
-
-
