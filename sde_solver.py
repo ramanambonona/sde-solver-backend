@@ -15,7 +15,6 @@ class SDESolver:
     
     def add_step(self, title: str, content: str):
         """Add a step to the solution process"""
-        # Clean LaTeX content before adding
         cleaned_content = self.clean_latex_content(content)
         self.steps.append({"title": title, "content": cleaned_content})
     
@@ -24,22 +23,15 @@ class SDESolver:
         if not content:
             return content
             
-        # Remove excessive $$ and ensure proper formatting
-        cleaned = re.sub(r'\$\s*\\\s*\$', '', content)  # $ \$ $
-        cleaned = re.sub(r'\$\s*\$', '', cleaned)  # $ $
-        cleaned = re.sub(r'\\\[\s*\\\]', '', cleaned)  # \[ \]
-        
-        # Remove surrounding $ if present
+        cleaned = re.sub(r'\$\s*\\\s*\$', '', content)
+        cleaned = re.sub(r'\$\s*\$', '', cleaned)
+        cleaned = re.sub(r'\\\[\s*\\\]', '', cleaned)
         cleaned = re.sub(r'^\$|\$$', '', cleaned)
-        
-        # Remove surrounding \[ and \] if present
         cleaned = re.sub(r'^\\\[|\\\]$', '', cleaned)
-        
         return cleaned.strip()
     
     def parse_expression(self, expr_str: str, variables: Dict[str, str]) -> sp.Expr:
         """Parse string expression to sympy expression"""
-        # Create symbol mapping
         sym_map = {}
         for var_name, var_type in variables.items():
             if var_type == "variable":
@@ -47,7 +39,6 @@ class SDESolver:
             elif var_type == "function":
                 sym_map[var_name] = Function(var_name)(symbols('t'))
         
-        # Add common symbols
         common_symbols = {
             't': symbols('t'), 'x': symbols('x'), 'y': symbols('y'), 'z': symbols('z'),
             'w': symbols('w'), 'W': symbols('W'), 'dt': symbols('dt'), 'dw': symbols('dw'),
@@ -57,7 +48,6 @@ class SDESolver:
         }
         sym_map.update(common_symbols)
         
-        # Parse expression
         try:
             return sp.sympify(expr_str, locals=sym_map)
         except:
@@ -68,7 +58,6 @@ class SDESolver:
         try:
             return eval(expr_str, {"__builtins__": None, "sqrt": sqrt, "exp": exp}, sym_map)
         except:
-            # If all else fails, return as string
             return sp.sympify(expr_str)
     
     def solve_separable_sde(self, drift: sp.Expr, diffusion: sp.Expr, t0: float = 0, X0: float = 0) -> Dict:
@@ -78,25 +67,16 @@ class SDESolver:
         self.add_step("Separation of Variables Method", 
                      "For SDE: $dX_t = \\mu(t,X)dt + \\sigma(t,X)dW_t$")
         
-        # Try to separate variables
         try:
-            # Case 1: μ(t,X) = f(t)g(X), σ(t,X) = h(t)k(X)
-            # This is a simplified approach - in practice would need more sophisticated detection
-            
-            # For the specific case: drift = -2*x/(1+t), diffusion = sqrt(t*(1-t))
             if str(drift) == str(-2*x/(1+t)) and str(diffusion) == str(sqrt(t*(1-t))):
                 self.add_step("Specific Case Detected", 
                              "Solving: $dX_t = -\\frac{2X_t}{1+t}dt + \\sqrt{t(1-t)}dW_t$")
                 
-                # Integrating factor method
                 integrating_factor = exp(integrate(2/(1+t), t))
                 self.add_step("Integrating Factor", 
                              f"Integrating factor: $F(t) = {sp.latex(integrating_factor)}$")
                 
-                # Apply integrating factor
-                # d(X_t * F(t)) = F(t) * σ(t) dW_t
                 stochastic_integral = integrate(integrating_factor * diffusion, w)
-                
                 solution = (X0 * integrating_factor.subs(t, t0) + stochastic_integral) / integrating_factor
                 
                 self.add_step("Solution via Integrating Factor", 
@@ -107,22 +87,18 @@ class SDESolver:
                     "method": "integrating_factor",
                     "steps": self.steps
                 }
-            
         except Exception as e:
             self.add_step("Separation Method Failed", 
                          f"Could not apply separation method: {str(e)}")
         
-        # Fallback to general method
         return self.solve_reducible_nonlinear(drift, diffusion, t0, X0)
     
     def solve_linear_sde(self, drift: sp.Expr, diffusion: sp.Expr, t0: float = 0, X0: float = 0) -> Dict:
         """Solve linear SDE using the method from Huang's paper"""
         t, s, w, x = symbols('t s w x')
         
-        # Extract coefficients for linear SDE: dX = (aX + b)dt + (cX + d)dW
         a = diff(drift, x) if x in drift.free_symbols else 0
         b = drift.subs(x, 0) if x in drift.free_symbols else drift
-        
         c = diff(diffusion, x) if x in diffusion.free_symbols else 0
         d = diffusion.subs(x, 0) if x in diffusion.free_symbols else diffusion
         
@@ -130,10 +106,9 @@ class SDESolver:
                      f"Drift: $a(t) = {sp.latex(a)}$, $b(t) = {sp.latex(b)}$\n"
                      f"Diffusion: $c(t) = {sp.latex(c)}$, $d(t) = {sp.latex(d)}$")
         
-        # Integration factor
         integrand_a = a - c**2/2
         integral_a = integrate(integrand_a, (s, t0, t))
-        integral_c = integrate(c, (w, t0, t))  # This represents ∫c dW
+        integral_c = integrate(c, (w, t0, t))
         
         Phi = sp.exp(integral_a + integral_c)
         Phi_inv = 1/Phi
@@ -141,12 +116,11 @@ class SDESolver:
         self.add_step("Integration Factor", 
                      f"$\\Phi_{{t_0,t}} = \\exp\\left(\\int_{{t_0}}^t \\left(a(s) - \\frac{{1}}{{2}}c(s)^2\\right)ds + \\int_{{t_0}}^t c(s)dW_s\\right)$")
         
-        # Solution components
         integrand1 = (b - c*d) * Phi_inv
         I1 = integrate(integrand1, (s, t0, t))
         
         integrand2 = d * Phi_inv
-        I2 = integrate(integrand2, (w, t0, t))  # Stochastic integral
+        I2 = integrate(integrand2, (w, t0, t))
         
         solution = Phi * (X0 + I1 + I2)
         
@@ -171,16 +145,12 @@ class SDESolver:
                      "For stationary solution $\\frac{\\partial p}{\\partial t} = 0$, we get:\n"
                      "$p(x) = \\frac{C}{\\sigma^2(x)} \\exp\\left(2\\int^x \\frac{\\mu(s)}{\\sigma^2(s)} ds\\right)$")
         
-        # Compute the integral in the exponent
         try:
             exponent_integral = 2 * integrate(drift / (diffusion**2), x)
             self.add_step("Exponent Integral",
                          f"$2\\int \\frac{{\\mu(x)}}{{\\sigma^2(x)}} dx = {sp.latex(exponent_integral)}$")
             
-            # Unnormalized density
             unnormalized_density = sp.exp(exponent_integral) / (diffusion**2)
-            
-            # Create a general solution with normalization constant
             C = symbols('C')
             stationary_density = C * unnormalized_density
             
@@ -194,11 +164,9 @@ class SDESolver:
                 "solution_type": "stationary_distribution",
                 "steps": self.steps
             }
-            
         except Exception as e:
             self.add_step("Integration Failed", 
                          f"Could not compute the integral: {str(e)}")
-            # Return a general form
             C = symbols('C')
             general_solution = C * sp.exp(2 * integrate(drift / (diffusion**2), x)) / (diffusion**2)
             
@@ -213,27 +181,22 @@ class SDESolver:
         """Solve reducible nonlinear SDE using integrating factor method"""
         t, w, x = symbols('t w x')
         
-        # For SDE: dX = f(t,X)dt + b(t)X dW
-        # Identify b(t)
         b_expr = diffusion / x if x in diffusion.free_symbols else 0
         
         self.add_step("Identify Integrating Factor",
                      f"Diffusion coefficient: $b(t) = {sp.latex(b_expr)}$")
         
-        # Integrating factor F_t
-        stochastic_integral = integrate(b_expr, w)  # ∫b dW
-        deterministic_integral = integrate(b_expr**2, t) / 2  # ½∫b² dt
+        stochastic_integral = integrate(b_expr, w)
+        deterministic_integral = integrate(b_expr**2, t) / 2
         
         F_t = sp.exp(-stochastic_integral + deterministic_integral)
         
         self.add_step("Integrating Factor",
                      f"$F_t = \\exp\\left(-\\int b(s)dW_s + \\frac{{1}}{{2}}\\int b(s)^2 ds\\right)$")
         
-        # Transform to ODE for Y_t = F_t X_t
         Y = Function('Y')(t)
         X_expr = Y / F_t
         
-        # The ODE for Y_t
         f_expr = drift.subs(x, X_expr)
         ode_rhs = F_t * f_expr
         
@@ -241,13 +204,11 @@ class SDESolver:
                      f"Let $Y_t = F_t X_t$, then:\n"
                      f"$\\frac{{dY_t}}{{dt}} = F_t \\cdot f(t, F_t^{{-1}} Y_t)$")
         
-        # Solve the ODE (simplified approach)
         try:
             from sympy import dsolve
             ode_solution = dsolve(sp.Derivative(Y, t) - ode_rhs, Y)
             X_solution = ode_solution.rhs / F_t
         except:
-            # Fallback solution representation
             X_solution = X0 * sp.exp(integrate(b_expr, w) - integrate(b_expr**2, t)/2 + integrate(drift, t)
         
         self.add_step("ODE Solution", 
@@ -267,11 +228,9 @@ class SDESolver:
         """Main solving method with enhanced capabilities"""
         self.steps = []
         
-        # Default variables
         if variables is None:
             variables = {'t': 'variable', 'x': 'variable', 'W': 'variable'}
         
-        # Parse expressions
         drift_expr = self.parse_expression(drift, variables)
         diffusion_expr = self.parse_expression(diffusion, variables)
         
@@ -279,28 +238,22 @@ class SDESolver:
                      f"Solving {'Itô' if equation_type == 'ito' else 'Stratonovich'} SDE:\n"
                      f"$dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t$")
         
-        # Choose solution method based on equation characteristics
         x, t = symbols('x t')
-        
-        # Check if it's a Kolmogorov forward equation request
         is_kolmogorov = "kolmogorov" in drift.lower() or "stationary" in drift.lower()
         
         if is_kolmogorov:
             self.add_step("Equation Classification", "Kolmogorov Forward Equation detected")
             result = self.solve_kolmogorov_forward(drift_expr, diffusion_expr)
         else:
-            # Check for specific known forms
             is_linear = (diff(drift_expr, x, 2) == 0) and (diff(diffusion_expr, x, 2) == 0)
             
             if is_linear:
                 self.add_step("Equation Classification", "Linear SDE detected")
                 result = self.solve_linear_sde(drift_expr, diffusion_expr)
             else:
-                # Try separable method first for specific forms
                 self.add_step("Equation Classification", "Nonlinear SDE detected - trying various methods")
                 result = self.solve_separable_sde(drift_expr, diffusion_expr)
         
-        # Apply initial condition if provided
         final_solution = result["solution"]
         if initial_condition and not is_kolmogorov:
             try:
@@ -308,7 +261,6 @@ class SDESolver:
                 t0_val = parameters.get('t0', 0) if parameters else 0
                 x0_val = parameters.get('x0', 1) if parameters else 1
                 
-                # Apply initial condition by substituting t = t0 and solving for constants
                 if 'C' in [str(s) for s in final_solution.free_symbols]:
                     C = symbols('C')
                     ic_eq = final_solution.subs(t, t0_val) - x0_val
@@ -316,12 +268,10 @@ class SDESolver:
                     final_solution = final_solution.subs(C, C_solution)
                     self.add_step("Apply Initial Condition", 
                                  f"Using $X({t0_val}) = {x0_val}$ to determine constant")
-                
             except Exception as e:
                 self.add_step("Initial Condition Application", 
                              f"Could not apply initial condition: {str(e)}")
         
-        # Clean the final solution
         final_solution_latex = self.clean_latex_content(sp.latex(final_solution))
         
         return {
@@ -335,7 +285,6 @@ class SDESolver:
             }
         }
 
-# Utility function for Ito and Stratonovich conversions
 def convert_ito_stratonovich(drift_ito: sp.Expr, diffusion: sp.Expr, variables: Dict) -> sp.Expr:
     """Convert between Ito and Stratonovich formulations"""
     x = symbols('x')
