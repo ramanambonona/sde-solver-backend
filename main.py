@@ -567,10 +567,12 @@ async def download_latex(download_data: DownloadRequest):
         raise HTTPException(status_code=500, detail=f"Error generating LaTeX: {str(e)}")
 
 def generate_latex_content(data):
-    """Generate LaTeX content in English - safer version"""
+    """Generate LaTeX content in English - safe version without backslash issues"""
+    
     # Build steps content
     steps_content = ""
     for i, step in enumerate(data.steps, 1):
+        # Clean the content by removing $ and \[ \]
         clean_content = step['content'].replace('$', '').replace('\\[', '').replace('\\]', '')
         steps_content += f"\\subsection*{{Step {i}: {step['title']}}}\n"
         steps_content += f"{clean_content}\n\n"
@@ -659,6 +661,22 @@ async def get_examples():
             "parameters": {"theta": 1.0, "mu": 0.0, "sigma": 0.5, "x0": 0},
             "process_type": "ornstein_uhlenbeck"
         },
+        "separable_example": {
+            "name": "Separable SDE Example",
+            "drift": "-2*x/(1+t)",
+            "diffusion": "sqrt(t*(1-t))",
+            "description": "SDE with separable variables using integrating factor method",
+            "parameters": {"t0": 0, "x0": 1},
+            "process_type": "custom"
+        },
+        "kolmogorov_example": {
+            "name": "Kolmogorov Forward Equation",
+            "drift": "-x",  # Ornstein-Uhlenbeck drift
+            "diffusion": "1",  # Constant diffusion
+            "description": "Stationary solution of Kolmogorov forward equation",
+            "parameters": {},
+            "process_type": "custom"
+        },
         "vasicek_model": {
             "name": "Vasicek Model",
             "drift": "a*(b - x)",
@@ -666,22 +684,6 @@ async def get_examples():
             "description": "Interest rate model with mean reversion",
             "parameters": {"a": 0.1, "b": 0.05, "sigma": 0.02, "r0": 0.05},
             "process_type": "vasicek"
-        },
-        "cir_model": {
-            "name": "CIR Model",
-            "drift": "a*(b - x)",
-            "diffusion": "sigma*sqrt(x)",
-            "description": "Cox-Ingersoll-Ross interest rate model",
-            "parameters": {"a": 0.1, "b": 0.05, "sigma": 0.1, "r0": 0.05},
-            "process_type": "cir"
-        },
-        "brownian_motion": {
-            "name": "Standard Brownian Motion",
-            "drift": "0",
-            "diffusion": "1",
-            "description": "Standard Wiener process",
-            "parameters": {},
-            "process_type": "brownian"
         }
     }
     return examples
@@ -689,4 +691,5 @@ async def get_examples():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
