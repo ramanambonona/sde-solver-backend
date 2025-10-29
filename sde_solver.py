@@ -13,12 +13,14 @@ class SDESolver:
     def __init__(self):
         self.steps = []
     
-    def add_step(self, title: str, content: str):
-        """Add a step to the solution process"""
-        cleaned_content = self.clean_latex_content(content)
-        # Wrap if not delimited as per correction
-        if not re.search(r'\$|\\\[{1,2}', cleaned_content):
-            cleaned_content = f"${cleaned_content}$"
+    def add_step(self, title: str, content: str, is_latex: bool = True):
+        """Add a step to the solution process, optional LaTeX flag"""
+        if is_latex:
+            cleaned_content = self.clean_latex_content(content)
+            if not re.search(r'\$|\\\[{1,2}', cleaned_content):
+                cleaned_content = f"\\[{cleaned_content}\\]"
+        else:
+            cleaned_content = content  # Plain text
         self.steps.append({"title": title, "content": cleaned_content})
     
     def clean_latex_content(self, content: str) -> str:
@@ -29,12 +31,12 @@ class SDESolver:
         # Nettoyage des séquences de $ ou \[\]
         cleaned = re.sub(r'\$\s*\$', '', content)  # Remove empty $$
         cleaned = re.sub(r'\\\[\s*\\\]', '', cleaned)
-        cleaned = re.sub(r'\$\$', r'$$', cleaned)  # Deduplicate
+        cleaned = re.sub(r'\$\$', r'$', cleaned)  # Deduplicate to single $
         cleaned = re.sub(r'\\\$', r'$', cleaned)  # Unescape
         
         # Supprime les délimiteurs de début/fin si l'expression est entre $...$ ou \[...\]
-        cleaned = re.sub(r'^\$|\$$', '', cleaned)
-        cleaned = re.sub(r'^\\\[|\\\]$', '', cleaned)
+        cleaned = re.sub(r'^\$|\$$', '', cleaned.strip())
+        cleaned = re.sub(r'^\\\[|\\\]$', '', cleaned.strip())
         return cleaned.strip()
     
     def parse_expression(self, expr_str: str, variables: Dict[str, str]) -> sp.Expr:
@@ -76,7 +78,7 @@ class SDESolver:
         """Solve SDE using separation of variables method"""
         t, x, w = symbols('t x w')
         
-        self.add_step("Separation of Variables Method", "For SDE: $dX_t = \\mu(t,X)dt + \\sigma(t,X)dW_t$")
+        self.add_step("Separation of Variables Method", "dX_t = \\mu(t,X) dt + \\sigma(t,X) dW_t")
         
         try:
             # Cas spécifique pour l'équation linéaire (intégration par facteur intégrant)
@@ -84,7 +86,7 @@ class SDESolver:
             if x in drift.free_symbols and x in diffusion.free_symbols:
                 # Vérification si l'équation est linéaire du type dX_t = (a(t)X + b(t))dt + (c(t)X + d(t))dW_t
                 if diff(drift, x, 2) == 0 and diff(diffusion, x, 2) == 0:
-                    self.add_step("Case Detection", "Equation is linear, deferring to linear solver approach.")
+                    self.add_step("Case Detection", "Equation is linear, using linear solver approach.", is_latex=False)
                     return self.solve_linear_sde(drift, diffusion, t0, X0)
 
             # Essayer de séparer les variables (pas toujours possible symboliquement)
@@ -92,7 +94,7 @@ class SDESolver:
             f_t = drift.subs(x, 1) if not drift.free_symbols.difference({t}) else 0
             
             if g_x != 0 and f_t != 0:
-                self.add_step("Separable Case", "The equation is separable: $dX = f(t) dt + g(x) dW$ (approximately)")
+                self.add_step("Separable Case", "The equation is separable: dX = f(t) dt + g(x) dW (approximately)")
                 # Intégration
                 int_g = integrate(g_x, x)
                 int_f = integrate(f_t, t)
@@ -114,14 +116,14 @@ class SDESolver:
             return {"solution": solution, "solution_type": "separable"}
         
         except Exception as e:
-            self.add_step("Error in Separation", f"Could not separate variables: {str(e)}")
+            self.add_step("Error in Separation", f"Could not separate variables: {str(e)}", is_latex=False)
             return {"solution": "No closed-form solution found", "solution_type": "none"}
 
     def solve_linear_sde(self, drift: sp.Expr, diffusion: sp.Expr, t0: float = 0, X0: float = 0) -> Dict:
         """Solve linear SDE using integrating factor"""
         t, x = symbols('t x')
         
-        self.add_step("Linear SDE Method", "For linear SDE: $dX = (a(t)X + b(t))dt + (c(t)X + d(t))dW$")
+        self.add_step("Linear SDE Method", "dX = (a(t)X + b(t))dt + (c(t)X + d(t))dW")
         
         try:
             # Extract coefficients (assume linear in x)
@@ -149,14 +151,14 @@ class SDESolver:
             return {"solution": solution, "solution_type": "linear"}
         
         except Exception as e:
-            self.add_step("Error in Linear Solve", f"Could not solve linear SDE: {str(e)}")
+            self.add_step("Error in Linear Solve", f"Could not solve linear SDE: {str(e)}", is_latex=False)
             return {"solution": "No closed-form solution found", "solution_type": "none"}
 
     def solve_kolmogorov_forward(self, drift: sp.Expr, diffusion: sp.Expr) -> Dict:
         """Solve for stationary distribution using Kolmogorov forward equation"""
         x = symbols('x')
         
-        self.add_step("Kolmogorov Forward Equation", "For stationary density p(x): $-\\frac{d}{dx} [\\mu(x) p(x)] + \\frac{1}{2} \\frac{d^2}{dx^2} [\\sigma^2(x) p(x)] = 0$")
+        self.add_step("Kolmogorov Forward Equation", "-\\frac{d}{dx} [\\mu(x) p(x)] + \\frac{1}{2} \\frac{d^2}{dx^2} [\\sigma^2(x) p(x)] = 0")
         
         try:
             # Assume stationary: integrate the ODE for p(x)
@@ -175,7 +177,7 @@ class SDESolver:
             return {"solution": p_x, "solution_type": "stationary_distribution"}
         
         except Exception as e:
-            self.add_step("Error in KFE", f"Could not solve KFE: {str(e)}")
+            self.add_step("Error in KFE", f"Could not solve KFE: {str(e)}", is_latex=False)
             return {"solution": "No stationary distribution found", "solution_type": "none"}
 
     def solve(self, equation_type: str, drift_str: str, diffusion_str: str, 
@@ -187,7 +189,7 @@ class SDESolver:
         drift_expr = self.parse_expression(drift_str, variables)
         diffusion_expr = self.parse_expression(diffusion_str, variables)
         
-        self.add_step("Parsed Equation", f"$dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t$")
+        self.add_step("Parsed Equation", f"dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t")
         
         # Standardized IC parsing as per correction
         t0_val = 0.0
@@ -220,25 +222,25 @@ class SDESolver:
         # Détection de cas stationnaire et résolution
         is_kolmogorov = False  # or condition for stationary
         if is_kolmogorov or not initial_condition: 
-            self.add_step("Equation Classification", "Kolmogorov Forward Equation (Stationary Density) approach detected or no initial condition given.")
+            self.add_step("Equation Classification", "Kolmogorov Forward Equation (Stationary Density) approach detected or no initial condition given.", is_latex=False)
             result = self.solve_kolmogorov_forward(drift_expr, diffusion_expr)
             solution_type = "stationary_distribution"
         else:
             # Convertir Stratonovich en Itô si nécessaire (simplification: on suppose la formule Itô)
             if equation_type == 'stratonovich':
-                self.add_step("Itô-Stratonovich Conversion", "Converting Stratonovich to Itô: $\\mu_{Ito} = \\mu_{Strat} + \\frac{1}{2}\\sigma(x)\\sigma'(x)$")
+                self.add_step("Itô-Stratonovich Conversion", "\\mu_{Ito} = \\mu_{Strat} + \\frac{1}{2}\\sigma(x)\\sigma'(x)")
                 drift_expr = drift_expr + 0.5 * diffusion_expr * diff(diffusion_expr, x)
-                self.add_step("Itô Form", f"$dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t$")
+                self.add_step("Itô Form", f"dX_t = {sp.latex(drift_expr)} dt + {sp.latex(diffusion_expr)} dW_t")
 
             # Test de linéarité
             is_linear = (diff(drift_expr, x, 2) == 0) and (diff(diffusion_expr, x, 2) == 0)
             
             if is_linear:
-                self.add_step("Equation Classification", "Linear SDE detected")
+                self.add_step("Equation Classification", "Linear SDE detected.", is_latex=False)
                 result = self.solve_linear_sde(drift_expr, diffusion_expr, t0_val, x0_val)  # Updated to pass parsed vals
                 solution_type = "linear_general_formula"
             else:
-                self.add_step("Equation Classification", "Nonlinear SDE detected - trying various methods")
+                self.add_step("Equation Classification", "Nonlinear SDE detected - trying various methods.", is_latex=False)
                 # On utilise solve_separable_sde qui contient des heuristiques
                 result = self.solve_separable_sde(drift_expr, diffusion_expr, t0_val, x0_val)  # Updated
                 solution_type = result.get("solution_type", "exact_approx")
@@ -257,12 +259,12 @@ class SDESolver:
                     C_solution = solve(ic_eq, C_sym)
                     if C_solution:
                         final_solution = final_solution.subs(C_sym, C_solution[0])
-                        self.add_step("Apply Initial Condition", f"Using $X({t0_val}) = {x0_val}$ to determine constant $C_1$")
+                        self.add_step("Apply Initial Condition", f"Using X({t0_val}) = {x0_val} to determine constant C_1")
                     else:
-                         self.add_step("Initial Condition Application", "Could not solve for integration constant C1.")
+                         self.add_step("Initial Condition Application", "Could not solve for integration constant C1.", is_latex=False)
 
             except Exception as e:
-                self.add_step("Initial Condition Application", f"Could not apply initial condition: {str(e)}")
+                self.add_step("Initial Condition Application", f"Could not apply initial condition: {str(e)}", is_latex=False)
         
         final_solution_latex = self.clean_latex_content(sp.latex(final_solution))
         
