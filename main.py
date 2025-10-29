@@ -208,7 +208,7 @@ async def solve_sde(problem: SDEProblem):
             problem.initial_condition,
             problem.variables or {},
             problem.parameters or {},
-            problem.process_type
+            problem.process_type  # Passed as per correction
         )
         return result
     except Exception as e:
@@ -352,16 +352,12 @@ async def generate_pdf(data: Dict):
         for step in data['steps']:
             story.append(Paragraph(step['title'], styles['Heading3']))
             math_style = ParagraphStyle('math', parent=styles['Normal'], alignment=1)  # Center
-            cleaned_content = re.sub(r'\$([^\$]+)\$', r'\\\1', step['content'])  # $math$ → \[math\]
-            cleaned_content = re.sub(r'\$\$([^\$]+)\$\$', r'\\[ \1 \\]', cleaned_content)  # $$ → display
-            story.append(Paragraph(cleaned_content, math_style))
+            story.append(Paragraph(step['content'], math_style))
             story.append(Spacer(1, 0.1*inch))
         
         # Final Solution
         story.append(Paragraph("Final Solution", styles['Heading2']))
-        cleaned_final = re.sub(r'\$([^\$]+)\$', r'\\\1', data['final_solution'])
-        cleaned_final = re.sub(r'\$\$([^\$]+)\$\$', r'\\[ \1 \\]', cleaned_final)
-        story.append(Paragraph(cleaned_final, styles['Normal']))
+        story.append(Paragraph(data['final_solution'], styles['Normal']))
         
         doc.build(story)
         buffer.seek(0)
