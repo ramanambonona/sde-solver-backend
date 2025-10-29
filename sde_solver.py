@@ -303,12 +303,12 @@ class SDESolver:
             
             if is_linear:
                 self.add_step("Equation Classification", "Linear SDE detected")
-                result = self.solve_linear_sde(drift_expr, diffusion_expr, float(initial_condition.split('=')[0].strip()), float(initial_condition.split('=')[1].strip()))
+                result = self.solve_linear_sde(drift_expr, diffusion_expr, t0_val, x0_val)
                 solution_type = "linear_general_formula"
             else:
                 self.add_step("Equation Classification", "Nonlinear SDE detected - trying various methods")
                 # On utilise solve_separable_sde qui contient des heuristiques
-                result = self.solve_separable_sde(drift_expr, diffusion_expr, float(initial_condition.split('=')[0].strip()), float(initial_condition.split('=')[1].strip()))
+                result = self.solve_separable_sde(drift_expr, diffusion_expr, t0_val, x0_val)
                 solution_type = result.get("solution_type", "exact_approx")
         
         final_solution = result["solution"]
@@ -359,3 +359,39 @@ def convert_ito_stratonovich(drift_ito: sp.Expr, diffusion: sp.Expr, variables: 
     x = symbols('x')
     drift_stratonovich = drift_ito - 0.5 * diffusion * diff(diffusion, x)
     return drift_stratonovich
+    
+def _parse_initial_condition(self, initial_condition, parameters):
+    """
+    Accept : "X(0)=1", "1", "x0=1", "t0=0, x0=1", "", None.
+    Return (t0, x0) in float.
+    """
+    # Valeurs par défaut
+    t0_def = (parameters or {}).get('t0', 0.0)
+    x0_def = (parameters or {}).get('x0', (parameters or {}).get('X0', 0.0))
+
+    if not initial_condition:
+        return float(t0_def), float(x0_def)
+
+    s = str(initial_condition).strip()
+    
+    m = re.search(r'X\s*\(\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*\)\s*=\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)', s, re.I)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    t = re.search(r't0\s*=\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)', s, re.I)
+    x = re.search(r'x0\s*=\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)', s, re.I)
+    if t or x:
+        t0 = float(t.group(1)) if t else float(t0_def)
+        x0 = float(x.group(1)) if x else float(x0_def)
+        return t0, x0
+
+    
+    try:
+        return float(t0_def), float(s)
+    except ValueError:
+        
+        if s.lower() in ('x0', 'x_0'):
+            return float(t0_def), float(x0_def)
+
+        return float(t0_def), float(x0_def)
+
