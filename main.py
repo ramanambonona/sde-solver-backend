@@ -28,6 +28,7 @@ app = FastAPI(title="SDE Symbolic Solver API", version="1.0.0")
 origins = [
     "http://localhost:3000",
     "http://localhost:8000",
+    https://sde-solver.vercel.app/,
     "https://sde-solver.netlify.app",
     "https://symbolic-sde-solver.netlify.app",
     "https://*.netlify.app", 
